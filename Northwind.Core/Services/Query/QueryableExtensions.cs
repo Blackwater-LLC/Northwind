@@ -22,7 +22,7 @@
         /// <typeparam name="T">The element type.</typeparam>
         /// <param name="source">The IQueryable source.</param>
         /// <returns>A task representing the asynchronous operation, containing the first element or default.</returns>
-        public static Task<T> FirstOrDefaultAsync<T>(this IQueryable<T> source)
+        public static Task<T?> FirstOrDefaultAsync<T>(this IQueryable<T> source)
         {
             return Task.FromResult(source.FirstOrDefault());
         }

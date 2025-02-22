@@ -1,7 +1,8 @@
-﻿using MongoDB.Driver;
+﻿using System.Linq.Expressions;
+using MongoDB.Driver;
 using Northwind.Core.Builders;
+using Northwind.Core.Models;
 using Northwind.Core.Models.Results;
-using System.Linq.Expressions;
 
 namespace Northwind.Core.Services.Query.Update
 {
@@ -14,14 +15,16 @@ namespace Northwind.Core.Services.Query.Update
         private Expression<Func<T, bool>> _filter = x => true;
         private UpdateDefinition<T> _update = Builders<T>.Update.Combine();
         private readonly UpdateDefinitionBuilder<T> _builder = Builders<T>.Update;
+        private readonly EncryptionOptions<T> _encryptionOptions = GroupRegistry.GetEncryptionOptions<T>();
 
         private static Expression<Func<T, bool>> CombineFilters(Expression<Func<T, bool>> first, Expression<Func<T, bool>> second)
         {
-            var map = first.Parameters
-                .Select((f, i) => new { f, s = second.Parameters[i] })
-                .ToDictionary(p => p.s, p => p.f);
-            var secondBody = ParameterRebinder.ReplaceParameters(map, second.Body);
-            return Expression.Lambda<Func<T, bool>>(Expression.AndAlso(first.Body, secondBody), first.Parameters);
+            var parameter = Expression.Parameter(typeof(T));
+            var body = Expression.AndAlso(
+                Expression.Invoke(first, parameter),
+                Expression.Invoke(second, parameter)
+            );
+            return Expression.Lambda<Func<T, bool>>(body, parameter);
         }
 
         /// <summary>
@@ -38,7 +41,7 @@ namespace Northwind.Core.Services.Query.Update
         }
 
         /// <summary>
-        /// Specifies a field to update with a new value.
+        /// Specifies a field to update with a new value. The value is encrypted if encryption is enabled.
         /// </summary>
         /// <typeparam name="TField">The type of the field.</typeparam>
         /// <param name="field">The field selector expression.</param>
@@ -46,20 +49,42 @@ namespace Northwind.Core.Services.Query.Update
         /// <returns>The current update query instance.</returns>
         public IUpdateQuery<T> Set<TField>(Expression<Func<T, TField>> field, TField value)
         {
-            _update = _builder.Combine(_update, _builder.Set(field, value));
+            var encryptedValue = value;
+            
+            if (_encryptionOptions.UseEncryption)
+            {
+                if (value != null)
+                {
+                    var result = _encryptionOptions.EncryptFunc(value);
+                    encryptedValue = (TField)result;
+                }
+            }
+
+            _update = _builder.Combine(_update, _builder.Set(field, encryptedValue));
             return this;
         }
 
         /// <summary>
-        /// Executes the update operation.
+        /// Executes the update operation and decrypts the updated document if encryption is enabled.
         /// </summary>
         /// <returns>A task representing the asynchronous operation, containing the operation result.</returns>
         public async Task<OperationResult<T>> ExecuteAsync()
         {
             var group = GroupRegistry.GetGroup<T>();
+
             if (group.Options.ReturnDocumentState)
             {
-                var updated = await group.Collection.FindOneAndUpdateAsync(_filter, _update, new FindOneAndUpdateOptions<T> { ReturnDocument = ReturnDocument.After });
+                var updated = await group.Collection.FindOneAndUpdateAsync(
+                    _filter,
+                    _update,
+                    new FindOneAndUpdateOptions<T> { ReturnDocument = ReturnDocument.After }
+                );
+
+                if (updated != null && _encryptionOptions is { UseEncryption: true, DecryptFunc: not null })
+                {
+                    updated = _encryptionOptions.DecryptEntity(updated);
+                }
+
                 if (updated == null)
                 {
                     return new OperationResult<T>
@@ -69,6 +94,7 @@ namespace Northwind.Core.Services.Query.Update
                         StatusCode = "NOT_FOUND"
                     };
                 }
+
                 return new OperationResult<T>
                 {
                     Message = "Document updated successfully",
@@ -89,6 +115,7 @@ namespace Northwind.Core.Services.Query.Update
                         StatusCode = "NOT_FOUND"
                     };
                 }
+
                 return new OperationResult<T>
                 {
                     Message = "Document updated successfully",

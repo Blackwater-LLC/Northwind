@@ -8,7 +8,7 @@ namespace Northwind.Core.Interfaces
     /// </summary>
     /// <typeparam name="T">The entity type.</typeparam>
     /// <typeparam name="TKey">The primary key type of the entity.</typeparam>
-    public interface INorthwindDelete<T, TKey>
+    public interface INorthwindDelete<T, in TKey>
     {
         /// <summary>
         /// Deletes an entity based on its primary key.

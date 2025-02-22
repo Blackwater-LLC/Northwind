@@ -1,8 +1,9 @@
-﻿using MongoDB.Driver;
+﻿using System.Linq.Expressions;
+using MongoDB.Driver;
 using Northwind.Core.Builders;
 using Northwind.Core.Interfaces;
+using Northwind.Core.Models;
 using Northwind.Core.Models.Results;
-using System.Linq.Expressions;
 
 namespace Northwind.Core.Operations
 {
@@ -12,8 +13,11 @@ namespace Northwind.Core.Operations
     /// <typeparam name="T">The entity type.</typeparam>
     public class NorthwindUpdateOperation<T> : INorthwindUpdate<T>
     {
+        private readonly EncryptionOptions<T> _encryptionOptions = GroupRegistry.GetEncryptionOptions<T>();
+
         /// <summary>
         /// Asynchronously updates a single entity matching the specified filter using the provided update definition.
+        /// Decrypts the updated document if encryption is enabled.
         /// </summary>
         /// <param name="filter">The filter expression to match the entity.</param>
         /// <param name="updateDefinition">The update definition specifying the changes.</param>
@@ -28,7 +32,16 @@ namespace Northwind.Core.Operations
 
             if (group.Options.ReturnDocumentState)
             {
-                var updated = await group.Collection.FindOneAndUpdateAsync(filter, updateDefinition, new FindOneAndUpdateOptions<T> { ReturnDocument = ReturnDocument.After });
+                var updated = await group.Collection.FindOneAndUpdateAsync(
+                    filter, 
+                    updateDefinition, 
+                    new FindOneAndUpdateOptions<T> { ReturnDocument = ReturnDocument.After });
+
+                if (updated != null && _encryptionOptions.UseEncryption)
+                {
+                    updated = _encryptionOptions.DecryptEntity(updated);
+                }
+
                 if (updated == null)
                 {
                     result = new OperationResult<T>
@@ -71,6 +84,7 @@ namespace Northwind.Core.Operations
                     };
                 }
             }
+
             return result;
         }
     }

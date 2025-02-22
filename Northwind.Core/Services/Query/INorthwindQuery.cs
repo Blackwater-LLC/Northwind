@@ -16,6 +16,6 @@
         /// Asynchronously returns the first entity matching the query or default.
         /// </summary>
         /// <returns>A task representing the asynchronous operation, containing the first entity or default.</returns>
-        Task<T> FirstOrDefaultAsync();
+        Task<T?> FirstOrDefaultAsync();
     }
 }

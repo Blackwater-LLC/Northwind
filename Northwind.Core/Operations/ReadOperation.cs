@@ -3,6 +3,7 @@ using Northwind.Core.Builders;
 using Northwind.Core.Interfaces;
 using Northwind.Core.Models.Results;
 using System.Linq.Expressions;
+using Northwind.Core.Models;
 
 namespace Northwind.Core.Operations
 {
@@ -12,12 +13,16 @@ namespace Northwind.Core.Operations
     /// <typeparam name="T">The entity type.</typeparam>
     public class NorthwindReadOperation<T> : INorthwindRead<T>
     {
+        private readonly EncryptionOptions<T> _encryptionOptions = GroupRegistry.GetEncryptionOptions<T>();
         public OperationResult<T> Read(Expression<Func<T, bool>> filter)
         {
             ArgumentNullException.ThrowIfNull(filter);
 
             var group = GroupRegistry.GetGroup<T>();
             var entity = group.Collection.Find(filter).FirstOrDefault();
+
+            if (_encryptionOptions.UseEncryption)
+                entity = _encryptionOptions.DecryptEntity(entity);
 
             if (entity == null)
             {
@@ -43,6 +48,9 @@ namespace Northwind.Core.Operations
 
             var group = GroupRegistry.GetGroup<T>();
             var entity = await group.Collection.Find(filter).FirstOrDefaultAsync();
+            
+            if (_encryptionOptions.UseEncryption)
+                entity = _encryptionOptions.DecryptEntity(entity);
 
             if (entity == null)
             {

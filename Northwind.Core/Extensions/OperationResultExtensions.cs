@@ -7,7 +7,7 @@ namespace Northwind.Core.Extensions
     /// </summary>
     public static class OperationResultExtensions
     {
-        public static async Task<T> GetDataAsync<T>(this Task<OperationResult<T>> operationTask)
+        public static async Task<T?> GetDataAsync<T>(this Task<OperationResult<T?>> operationTask)
         {
             var result = await operationTask;
             return result.NewData;

@@ -13,7 +13,7 @@
         /// <summary>
         /// Gets or sets the state of the operation.
         /// </summary>
-        public OperationState State { get; set; }
+        public OperationState State { get; init; }
         /// <summary>
         /// Gets or sets the status code representing the outcome of the operation.
         /// </summary>
@@ -29,7 +29,7 @@
         /// <summary>
         /// Gets or sets the new document state if applicable.
         /// </summary>
-        public T? NewData { get; set; }
+        public T? NewData { get; init; }
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ using Northwind.Core.Builders;
 using Northwind.Core.Interfaces;
 using Northwind.Core.Models.Results;
 using System.Reflection;
+using Northwind.Core.Models;
 
 namespace Northwind.Core.Operations
 {
@@ -12,6 +13,8 @@ namespace Northwind.Core.Operations
     /// <typeparam name="T">The entity type.</typeparam>
     public class NorthwindCreateOperation<T> : INorthwindCreate<T>
     {
+        private readonly EncryptionOptions<T> _encryptionOptions = GroupRegistry.GetEncryptionOptions<T>();
+        
         /// <summary>
         /// Creates a new entity of type T in its configured MongoDB collection.
         /// </summary>
@@ -26,35 +29,37 @@ namespace Northwind.Core.Operations
 
             foreach (var (_, unique, indexName) in group.IndexDefinitions)
             {
-                if (unique)
-                {
-                    string fieldName = indexName.EndsWith("_1") ? indexName.Substring(0, indexName.Length - 2) : indexName;
-                    PropertyInfo property = typeof(T).GetProperty(fieldName);
-                    if (property != null)
-                    {
-                        object value = property.GetValue(entity);
-                        var filter = Builders<T>.Filter.Eq(fieldName, value);
-                        bool exists = group.Collection.Find(filter).Any();
+                if (!unique) continue;
+                var fieldName = indexName.EndsWith("_1") ? indexName[..^2] : indexName;
+                
+                var property = typeof(T).GetProperty(fieldName);
+                if (property == null) continue;
+                
+                var value = property.GetValue(entity);
+                var filter = Builders<T>.Filter.Eq(fieldName, value);
+                var exists = group.Collection.Find(filter).Any();
 
-                        if (exists)
-                        {
-                            return new OperationResult<T>
-                            {
-                                Message = $"Creation violates the unique index definition for field '{fieldName}'",
-                                State = OperationState.Failure,
-                                StatusCode = "UNIQUE_INDEX_VIOLATION"
-                            };
-                        }
-                    }
+                if (exists)
+                {
+                    return new OperationResult<T>
+                    {
+                        Message = $"Creation violates the unique index definition for field '{fieldName}'",
+                        State = OperationState.Failure,
+                        StatusCode = "UNIQUE_INDEX_VIOLATION"
+                    };
                 }
             }
 
             try
             {
+                if (_encryptionOptions.UseEncryption)
+                    entity = _encryptionOptions.EncryptEntity(entity);
+                
                 if (group.Options.UseTransactions)
                 {
                     using var session = group.Client.StartSession();
                     session.StartTransaction();
+                    
                     group.Collection.InsertOne(session, entity);
                     session.CommitTransaction();
                 }
@@ -99,30 +104,33 @@ namespace Northwind.Core.Operations
 
             foreach (var (_, unique, indexName) in group.IndexDefinitions)
             {
-                if (unique)
+                if (!unique) continue;
+                
+                var fieldName = indexName.EndsWith("_1") ? indexName[..^2] : indexName;
+                var property = typeof(T).GetProperty(fieldName);
+                
+                if (property == null) continue;
+                var value = property.GetValue(entity);
+                
+                var filter = Builders<T>.Filter.Eq(fieldName, value);
+                var exists = await group.Collection.Find(filter).AnyAsync();
+                
+                if (exists)
                 {
-                    string fieldName = indexName.EndsWith("_1") ? indexName.Substring(0, indexName.Length - 2) : indexName;
-                    PropertyInfo property = typeof(T).GetProperty(fieldName);
-                    if (property != null)
+                    return new OperationResult<T>
                     {
-                        object value = property.GetValue(entity);
-                        var filter = Builders<T>.Filter.Eq(fieldName, value);
-                        bool exists = await group.Collection.Find(filter).AnyAsync();
-                        if (exists)
-                        {
-                            return new OperationResult<T>
-                            {
-                                Message = $"Creation violates the unique index definition for field '{fieldName}'",
-                                State = OperationState.Failure,
-                                StatusCode = "UNIQUE_INDEX_VIOLATION"
-                            };
-                        }
-                    }
+                        Message = $"Creation violates the unique index definition for field '{fieldName}'",
+                        State = OperationState.Failure,
+                        StatusCode = "UNIQUE_INDEX_VIOLATION"
+                    };
                 }
             }
 
             try
             {
+                if (_encryptionOptions.UseEncryption)
+                   entity = _encryptionOptions.EncryptEntity(entity);
+                
                 if (group.Options.UseTransactions)
                 {
                     using var session = await group.Client.StartSessionAsync();

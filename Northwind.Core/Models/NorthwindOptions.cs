@@ -8,11 +8,11 @@
         /// <summary>
         /// Gets or sets a value indicating whether MongoDB transactions are used.
         /// </summary>
-        public bool UseTransactions { get; set; } = false;
+        public bool UseTransactions { get; init; } = false;
 
         /// <summary>
         /// Gets or sets a value indicating whether the previous and new document states should be returned.
         /// </summary>
-        public bool ReturnDocumentState { get; set; } = false;
+        public bool ReturnDocumentState { get; init; } = false;
     }
 }

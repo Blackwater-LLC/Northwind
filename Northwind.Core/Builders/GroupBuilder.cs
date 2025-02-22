@@ -36,7 +36,7 @@ namespace Northwind.Core.Builders
         /// </summary>
         public NorthwindOptions Options { get; }
 
-        public readonly List<(IndexKeysDefinition<T> Index, bool Unique, string IndexName)> _indexDefinitions =
+        private readonly List<(IndexKeysDefinition<T> Index, bool Unique, string IndexName)> _indexDefinitions =
             [];
 
         /// <summary>
@@ -44,6 +44,8 @@ namespace Northwind.Core.Builders
         /// </summary>
         public IReadOnlyList<(IndexKeysDefinition<T> Index, bool Unique, string IndexName)> IndexDefinitions =>
             _indexDefinitions.AsReadOnly();
+        
+        public EncryptionOptions<T> EncryptionOptions = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GroupBuilder{T}"/> class.
@@ -76,11 +78,27 @@ namespace Northwind.Core.Builders
             ArgumentNullException.ThrowIfNull(indexExpression);
 
             var indexDefinition = Builders<T>.IndexKeys.Ascending(indexExpression);
-            string indexName = GetIndexName(indexExpression);
+            var indexName = GetIndexName(indexExpression);
 
             _indexDefinitions.Add((indexDefinition, unique, indexName));
             return this;
         }
+        
+        
+        /// <summary>
+        /// Configures options for encryption at rest
+        /// </summary>
+        /// <param name="encryptionOptions">The lambda expression indicating the field to index.</param>
+        /// <returns>The current <see cref="GroupBuilder{T}"/> instance.</returns>
+        public GroupBuilder<T> WithEncryption(EncryptionOptions<T> encryptionOptions)
+        {
+            ArgumentNullException.ThrowIfNull(encryptionOptions);
+            
+           EncryptionOptions = encryptionOptions;
+            
+            return this;
+        }
+        
 
         /// <summary>
         /// Finalizes the group configuration by creating indexes and registering the group.
@@ -118,17 +136,13 @@ namespace Northwind.Core.Builders
 
         private static string GetIndexName(Expression<Func<T, object>> expression)
         {
-            if (expression.Body is MemberExpression member)
+            return expression.Body switch
             {
-                return member.Member.Name + "_1";
-            }
-
-            if (expression.Body is UnaryExpression unary && unary.Operand is MemberExpression memberOperand)
-            {
-                return memberOperand.Member.Name + "_1";
-            }
-
-            throw new InvalidOperationException("Invalid index expression");
+                MemberExpression member => member.Member.Name + "_1",
+                UnaryExpression { Operand: MemberExpression memberOperand } =>
+                    memberOperand.Member.Name + "_1",
+                _ => throw new InvalidOperationException("Invalid index expression")
+            };
         }
     }
 
@@ -154,7 +168,7 @@ namespace Northwind.Core.Builders
         /// <param name="database">The MongoDB database instance.</param>
         /// <param name="collection">The MongoDB collection for the entity type.</param>
         /// <param name="options">The Northwind options.</param>
-        internal GroupBuilder(string name, IMongoClient client, IMongoDatabase database, IMongoCollection<T> collection, NorthwindOptions options)
+        private GroupBuilder(string name, IMongoClient client, IMongoDatabase database, IMongoCollection<T> collection, NorthwindOptions options)
             : base(name, client, database, collection, options)
         {
         }
@@ -233,17 +247,12 @@ namespace Northwind.Core.Builders
 
         private static string GetMemberName(Expression<Func<T, TKey>> expression)
         {
-            if (expression.Body is MemberExpression member)
+            return expression.Body switch
             {
-                return member.Member.Name;
-            }
-
-            if (expression.Body is UnaryExpression unary && unary.Operand is MemberExpression memberOperand)
-            {
-                return memberOperand.Member.Name;
-            }
-
-            throw new InvalidOperationException("Invalid primary key expression");
+                MemberExpression member => member.Member.Name,
+                UnaryExpression { Operand: MemberExpression memberOperand } => memberOperand.Member.Name,
+                _ => throw new InvalidOperationException("Invalid primary key expression")
+            };
         }
     }
 }

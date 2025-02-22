@@ -14,7 +14,7 @@ namespace Northwind.Core.Services.Query.Delete
 
         private static Expression<Func<T, bool>> CombineFilters(Expression<Func<T, bool>> first, Expression<Func<T, bool>> second)
         {
-            var map = first.Parameters
+            Dictionary<ParameterExpression, ParameterExpression?> map = first.Parameters
                 .Select((f, i) => new { f, s = second.Parameters[i] })
                 .ToDictionary(p => p.s, p => p.f);
             var secondBody = ParameterRebinder.ReplaceParameters(map, second.Body);

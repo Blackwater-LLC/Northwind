@@ -9,7 +9,7 @@ namespace Northwind.Core.Services.Query
     /// Initializes a new instance of the <see cref="ParameterRebinder"/> class.
     /// </remarks>
     /// <param name="map">The map of parameters to replace.</param>
-    public class ParameterRebinder(Dictionary<ParameterExpression, ParameterExpression> map) : ExpressionVisitor
+    public class ParameterRebinder(Dictionary<ParameterExpression, ParameterExpression?> map) : ExpressionVisitor
     {
         /// <summary>
         /// Replaces the parameters in the specified expression.
@@ -17,19 +17,15 @@ namespace Northwind.Core.Services.Query
         /// <param name="map">The map of parameters to replace.</param>
         /// <param name="exp">The expression.</param>
         /// <returns>The expression with replaced parameters.</returns>
-        public static Expression ReplaceParameters(Dictionary<ParameterExpression, ParameterExpression> map, Expression exp)
+        public static Expression ReplaceParameters(Dictionary<ParameterExpression, ParameterExpression?> map, Expression exp)
         {
             return new ParameterRebinder(map).Visit(exp);
         }
 
         /// <inheritdoc/>
-        protected override Expression VisitParameter(ParameterExpression node)
+        protected override Expression? VisitParameter(ParameterExpression node)
         {
-            if (map.TryGetValue(node, out ParameterExpression replacement))
-            {
-                return replacement;
-            }
-            return base.VisitParameter(node);
+            return map.TryGetValue(node, out var replacement) ? replacement : base.VisitParameter(node);
         }
     }
 }

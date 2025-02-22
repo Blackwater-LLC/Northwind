@@ -9,7 +9,7 @@ namespace Northwind.Api
 {
     public class Startup(IConfiguration configuration)
     {
-        public IConfiguration Configuration { get; } = configuration;
+        private IConfiguration Configuration { get; } = configuration;
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -37,16 +37,26 @@ namespace Northwind.Api
             var collection = database.GetCollection<TestClass>("Northwind");
 
             GroupBuilder<TestClass, int>.New(
-                name: nameof(TestClass),
-                client: client,
-                database: database,
-                collection: collection,
-                options: new NorthwindOptions { UseTransactions = true, ReturnDocumentState = true }
-            )
-            .HasPrimaryKey(x => x.Id)
-            .WithCustomKeyFieldName("myId")
-            .WithIndex(x => x.Name, unique: false)
-            .Build();
+                    name: nameof(TestClass),
+                    client: client,
+                    database: database,
+                    collection: collection,
+                    options: new NorthwindOptions { UseTransactions = true, ReturnDocumentState = true }
+                )
+                .HasPrimaryKey(x => x.Id)
+                .WithEncryption(new EncryptionOptions<TestClass>
+                {
+                    UseEncryption = true,
+                    EncryptFunc = obj => obj is string s 
+                        ? EncryptionUtility.EncryptString(s, "encryption_key") 
+                        : obj,
+                    DecryptFunc = obj => obj is string s 
+                        ? EncryptionUtility.DecryptString(s, "encryption_key") 
+                        : obj
+                })
+                .WithIndex(x => x.Name, unique: false)
+                .Build();
+
 
             app.UseSwagger();
             app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Northwind.Api v1"));
